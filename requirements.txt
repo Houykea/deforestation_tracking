@@ -1,14 +1,9 @@
 numpy
 pandas
-pyarrow
-requests
 rasterio
-pystac-client
-odc-stac
-dask[array]
-xarray
 scikit-learn
 joblib
 matplotlib
 streamlit
-pytest
+notebook
+ipykernel

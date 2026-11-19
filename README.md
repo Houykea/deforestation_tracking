@@ -1,58 +1,79 @@
-# Deforestation Tracking: Kratie, Cambodia
+# Deforestation Tracking
 
-Pixel-based Random Forest on Sentinel-2 dry-season composites (2019, 2021, 2023, 2025) to map
-forest and forest loss in Kratie. All data is public and needs no account.
+A machine-learning project that marks each pixel of a Sentinel-2 satellite image as
+**forest / non-forest**, then compares the maps from different years to find where
+forest was **lost** (in hectares).
 
-| Data | Source |
+The whole pipeline lives in one readable notebook: **`notebooks/deforestation.ipynb`**.
+
+## The idea in plain words
+
+- The model answers **one question per pixel**: *is this dot forest or not?*
+- **Training** = showing it 484 little labelled pictures so it learns the pattern.
+- **"Deforested" is not predicted by the model.** We get it by comparing two years:
+  a pixel that was forest before and is not forest now is loss. The hectares are
+  just counting those pixels.
+
+## Data (in `data/`, not committed - download with `scripts/get_data.ps1`)
+
+| Folder | What it is |
 |---|---|
-| Sentinel-2 L2A imagery | Earth Search STAC (AWS) |
-| Forest labels | ESA WorldCover 2021 (10 m) |
-| Loss check / label filter | Hansen Global Forest Change (30 m) |
+| `data/tiles/` | 484 labelled training chips (256x256, 9 channels). Split 340 / 72 / 72. |
+| `data/hf/composites/` | 4 yearly images: `s2_2019/2021/2023/2025.tif` |
 
-## Layout
+Label values: `0` non-forest, `1` forest, `2` deforested. Channels:
+`B02 B03 B04 B08 B11 B12 NDVI NBR NDWI`.
 
-```
-src/deforestation/
-  config.py     settings (region, years, sources, paths)
-  data/         AOI, label download, Sentinel-2 composites
-  features/     spectral indices, labels, sampling, splits
-  models/       train, predict, evaluate, tune
-  change/       forest mask, change detection, area, report
-app/            Streamlit UI
-scripts/        CLI entry points
-data/           raw, composites, labels, ... (git-ignored)
-models/         trained models
-notebooks/      exploration
-tests/
-```
+Imagery comes from the Hugging Face dataset `umeshuu/cambodia-deforestation`
+(pinned revision), so every teammate gets identical files.
 
-The previous NestJS/Next.js prototype is on the `legacy-nestjs-nextjs` branch.
-
-## Setup
+## Quick start
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-pip install -e .
-python -m pytest
+
+.\scripts\get_data.ps1          # download the data from Hugging Face
+
+jupyter notebook notebooks/deforestation.ipynb
 ```
 
-## Phase 1: data
+Run all cells top to bottom. The notebook trains the model, prints the metrics,
+and shows the forest-loss chart and maps.
+
+## Optional dashboard
+
+The notebook saves its results to `outputs/`. To view them as a web page:
 
 ```powershell
-python scripts/download_labels.py        # Hansen + WorldCover + Kratie boundary (~790 MB once)
-python scripts/download_composites.py    # Sentinel-2 dry-season composites 2019, 2021, 2023, 2025
-python scripts/build_training_data.py    # per-year label rasters + training table
+streamlit run app/streamlit_app.py
 ```
 
-Add `--test` to the last two to run on a 5 x 5 km area first (about 2 minutes).
+## How to answer the professor
 
-| Output | Content |
-|---|---|
-| `data/composites/s2_<year>.tif` | 20 m, UTM 48N. Bands B2 B3 B4 B8 B11 B12 (reflectance x 10000) + `n_clear` |
-| `data/labels/labels_<year>.tif` | Same grid. 1 forest, 0 non-forest, 255 not used |
-| `data/processed/training_samples.parquet` | Sampled pixels: bands, NDVI/NBR/NDMI, label, 5 km `block_id`, train/test `split` |
+- **The ML:** a supervised **binary pixel classifier** (Random Forest). Input = a
+  pixel's 9 channels; output = forest / non-forest. Trained on 484 labelled chips;
+  evaluated with per-class **IoU / F1** (not just accuracy).
+- **Why binary, not 3-class:** the "deforested" label is defined using Hansen loss
+  over 2019-2025, but the input is the 2021 image, so a pixel cleared later still
+  looks like forest and a pixel cleared earlier looks like non-forest. The label
+  isn't visible in the input, so it can't be learned - it comes from the
+  year-to-year comparison instead.
+- **The deforestation number:** run the model on each yearly image -> forest map ->
+  compare years -> count the pixels that went forest -> non-forest -> hectares.
+- **Caveats:** labels are auto-generated (WorldCover 2021 + Hansen), only 2021 is
+  labelled, and classes are imbalanced.
+- **Next step:** swap the Random Forest for a **U-Net** (same binary task, but it
+  uses spatial context) and compare per-class IoU / F1.
 
-Image year Y = 1 Nov Y to 28 Feb Y+1, i.e. the land at the end of Y.
-Label rules are documented in `src/deforestation/features/labels.py`.
+## Layout
+
+```
+notebooks/deforestation.ipynb   the whole pipeline (data -> model -> hectares -> chart)
+app/streamlit_app.py            optional dashboard over outputs/
+scripts/get_data.ps1            pinned Hugging Face download
+data/                           chips + yearly images (git-ignored)
+outputs/                        results written by the notebook (git-ignored)
+models/                         saved models (git-ignored)
+```
