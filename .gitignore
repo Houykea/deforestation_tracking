@@ -35,6 +35,3 @@ models/*.pt
 
 # Archived old code (kept locally, not part of the project)
 legacy/
-
-# Personal working notes (not committed)
-NOTES.md

@@ -4,6 +4,6 @@ rasterio
 scikit-learn
 joblib
 matplotlib
-streamlit
+seaborn
 notebook
 ipykernel
