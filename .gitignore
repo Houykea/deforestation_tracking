@@ -22,3 +22,16 @@ data/**/*
 outputs/
 models/*.pkl
 models/*.joblib
+models/*.pth
+models/*.pt
+
+# Raster formats
+*.tif
+*.jp2
+
+# Editor
+.vscode/
+.idea/
+
+# Archived old code (kept locally, not part of the project)
+legacy/
